@@ -1,0 +1,6 @@
+---
+# defaults file for fix-k8s
+
+vxlan_possible_interfaces:
+  - vxlan.calico
+  - flannel.1

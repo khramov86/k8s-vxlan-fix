@@ -1,0 +1,5 @@
+---
+- name: "Fix K8s"
+  hosts: "{{ k8s_hosts }}"
+  roles:
+    - fix-k8s

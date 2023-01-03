@@ -1,0 +1,35 @@
+---
+# tasks file for fix-k8s
+- name: "Определяю интерфейс"
+  ansible.builtin.set_fact:
+    vxlan_interface: "{{ ansible_interfaces | intersect(vxlan_possible_interfaces) |first }}"
+  failed_when: 'vxlan_interface == ""'
+
+- name: "Устанавливаю ethtool"
+  ansible.builtin.apt:
+    name: ethtool
+    state: present
+
+- name: "Создаю сервис для disable-offloading-on-vxlan.service"
+  ansible.builtin.template:
+    src: templates/disable-offloading-on-vxlan.service.j2
+    dest:  /etc/systemd/system/disable-offloading-on-vxlan.service
+    owner: root
+    group: root
+    mode: 775
+
+- name: "Копирую скрипт disable-offloading-on-vxlan"
+  ansible.builtin.template:
+    src: templates/disable-offloading-on-vxlan.j2
+    dest: /usr/local/bin/disable-offloading-on-vxlan
+    owner: root
+    group: root
+    mode: 775
+
+- name: "Включаю автозагрузку сервиса"
+  ansible.builtin.systemd:
+    name: disable-offloading-on-vxlan
+    enabled: yes
+    daemon_reload: yes
+    masked: no
+    state: restarted

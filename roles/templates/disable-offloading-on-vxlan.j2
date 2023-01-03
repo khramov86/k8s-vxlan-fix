@@ -1,0 +1,62 @@
+#!/bin/bash
+ 
+# This script apply a workarround for a bug encountered on Kubernetes with vxlan
+# and iptables >= 1.6.2.
+# You can find more details on this bug here:
+# https://github.com/kubernetes/kubernetes/issues/96868
+# https://github.com/projectcalico/calico/issues/3145
+#
+# The workarround is to disable offloading on vxlan interface
+ 
+# Wait until an interface named {{ vxlan_interface }} appear
+# Wait a maximum of 10 minutes (= 60 checks every 10 seconds)
+ 
+sleep_interval=10
+max_retries=60
+nb_tries=0
+nic_name="{{ vxlan_interface }}"
+ 
+is_nic_available() {
+  ip a show dev $nic_name > /dev/null 2>&1
+}
+ 
+deactivate_offloading() {
+  ethtool --offload $nic_name rx off tx off
+}
+ 
+check_offloading() {
+  # Return an error if at least one offload is enabled (rx or tx)
+  if ethtool --show-offload $nic_name | grep -E '^.x-checksumming:' | grep -q  ': on'; then
+    return 1
+  else
+    return 0
+  fi
+}
+ 
+echo "Starting $(basename $0)"
+echo "This will disable RX and TX offloading on network interface $nic_name"
+ 
+while [[ $nb_tries -lt $max_retries ]]; do
+  if is_nic_available; then
+    echo "Network interface $nic_name found! Disabling offloading on it..."
+    deactivate_offloading
+    sleep 2
+    if check_offloading; then
+      echo "Offloading successfully disabled on interface $nic_name"
+      exit 0
+    else
+      echo "Offloading has not been disabled correctly on interface $nic_name. Please check what happened"
+      exit 2
+    fi
+  fi
+ 
+  nb_tries=$((nb_tries + 1))
+ 
+  echo "Network interface $nic_name does not exist yet. Waiting ${sleep_interval}s for it to appear (attempt $nb_tries/$max_retries)"
+ 
+  sleep $sleep_interval
+done
+ 
+# If we are here, then we have timed out
+echo "Exiting after $nb_tries attempts to detect interface $nic_name"
+exit 1
